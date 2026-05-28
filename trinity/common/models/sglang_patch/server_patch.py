@@ -103,8 +103,7 @@ def _create_cleanup(
 
             # Send SIGTERM to all alive processes simultaneously
             alive_processes = [
-                p for p in processes
-                if p is not None and p.pid is not None and p.is_alive()
+                p for p in processes if p is not None and p.pid is not None and p.is_alive()
             ]
 
             for process in alive_processes:
