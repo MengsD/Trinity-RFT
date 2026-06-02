@@ -181,6 +181,21 @@ class BaseInferenceModel(InferenceModel):
             )
         return prompt
 
+    def _build_dummy_routed_experts(self) -> torch.Tensor:
+        """Build zero-valued routed_experts tensor for dummy (truncated) experiences."""
+        layout = get_routed_experts_layout(
+            self.config.model_path,
+            trust_remote_code=self.config.trust_remote_code,
+        )
+        if layout is None:
+            raise ValueError(
+                "Failed to create dummy experience with routed_experts for truncated response "
+                "when enable_return_routed_experts is True."
+            )
+        num_layers, topk = layout
+        seq_len = self.config.max_prompt_tokens
+        return torch.zeros(seq_len, num_layers, topk, dtype=torch.uint8)
+
     def _handle_prompt_truncation(self, prompt: str, **kwargs) -> Tuple[Sequence, bool]:
         """Handle prompt truncation if needed."""
         # Tokenize once without truncation to check if truncation is needed
@@ -199,6 +214,11 @@ class BaseInferenceModel(InferenceModel):
             dummy_response = "[This experience is masked out due to overlong prompt]"
 
             token_ids = prompt_token_ids[: self.config.max_prompt_tokens + 1]
+
+            routed_experts = None
+            if getattr(self.config, "enable_return_routed_experts", False):
+                routed_experts = self._build_dummy_routed_experts()
+
             return [
                 Experience(
                     tokens=token_ids,
@@ -208,6 +228,7 @@ class BaseInferenceModel(InferenceModel):
                     response_text=dummy_response,
                     truncate_status="prompt_truncated",
                     reward=0.0,
+                    routed_experts=routed_experts,
                 )
                 for _ in range(kwargs.get("n", 1))
             ], False  # If prompt truncation is activated, return a list of dummy experiences & False
@@ -252,6 +273,11 @@ class BaseInferenceModel(InferenceModel):
                 f"Warning: {prompt_length=} exceeds the length limit {self.config.max_prompt_tokens}, "
                 f"this experience will be not counted in the loss computation."
             )
+
+            routed_experts = None
+            if getattr(self.config, "enable_return_routed_experts", False):
+                routed_experts = self._build_dummy_routed_experts()
+
             return Experience(
                 tokens=token_ids[: self.config.max_prompt_tokens + 1],
                 logprobs=torch.zeros(1, dtype=torch.float32),
@@ -259,6 +285,7 @@ class BaseInferenceModel(InferenceModel):
                 action_mask=torch.zeros(1, dtype=torch.bool),  # ignored in loss computation
                 messages=messages,  # messages are not truncated
                 truncate_status=truncate_status,
+                routed_experts=routed_experts,
             )
 
         # Truncate response if it exceeds max_model_len
