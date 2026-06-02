@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Reward Function with Overlong Reward Shaping described in DAPO (https://arxiv.org/pdf/2503.14476)"""
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 
@@ -37,7 +37,7 @@ class MathDAPORewardFn(RewardFn):
         response_token: torch.Tensor,
         truth: str,
         **kwargs,
-    ) -> dict[str, float]:
+    ) -> Tuple[dict, str]:
         """Compute DAPO reward components for one response.
 
         Args:
@@ -47,21 +47,24 @@ class MathDAPORewardFn(RewardFn):
             **kwargs: Extra arguments for compatibility with reward API.
 
         Returns:
-            dict[str, float]: Reward components containing accuracy and format_score.
+            Tuple[dict, str]: (metrics dict, extracted_answer)
         """
-        correct = compute_score(response, truth) >= 0.5
+        # Compute correctness and extract answer
+        score, extracted_answer = compute_score(response, truth)
         # DAPO paper (Sec. 2.4): +1 / -1 rule-based outcome reward
-        accuracy_score = 1.0 if correct else -1.0
+        accuracy_score = 1.0 if score >= 0.5 else -1.0
 
         format_score = 0.0
 
         if self.enable_overlong_penalty:
             format_score = self.compute_overlong_penalty(response_token)
 
-        return {
+        metrics = {
             "accuracy": accuracy_score,
             "format_score": format_score,
         }
+
+        return metrics, extracted_answer
 
     def compute_overlong_penalty(self, response_token):
         """Compute soft/hard penalty for long responses.

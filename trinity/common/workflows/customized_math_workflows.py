@@ -68,7 +68,7 @@ class MathBoxedWorkflow(SimpleWorkflow):
             responses = self.model.generate([prompt_text], **self.rollout_args)
 
         for i, response in enumerate(responses):
-            reward_dict = self.reward_fn(  # type: ignore [misc]
+            reward_dict, extracted_answer = self.reward_fn(  # type: ignore [misc]
                 response=response.response_text,  # type: ignore [arg-type]
                 truth=self.truth,
                 with_think=self.with_think,
@@ -82,6 +82,13 @@ class MathBoxedWorkflow(SimpleWorkflow):
             reward = sum(reward_dict.values())
             response.reward = reward
             response.eid.run = i + self.run_id_base
+
+            # Save ground_truth and extracted_answer to info field for debugging
+            if response.info is None:
+                response.info = {}
+            response.info["ground_truth"] = self.truth
+            response.info["extracted_answer"] = extracted_answer
+
             if (
                 response.truncate_status == "response_truncated"
                 and response.action_mask is not None
@@ -115,7 +122,7 @@ class AsyncMathBoxedWorkflow(MathBoxedWorkflow):
             responses = await self.model.generate_async([prompt_text], **self.rollout_args)
 
         for i, response in enumerate(responses):
-            reward_dict = self.reward_fn(  # type: ignore [misc]
+            reward_dict, extracted_answer = self.reward_fn(  # type: ignore [misc]
                 response=response.response_text,  # type: ignore [arg-type]
                 truth=self.truth,
                 with_think=self.with_think,
@@ -129,6 +136,13 @@ class AsyncMathBoxedWorkflow(MathBoxedWorkflow):
             reward = sum(reward_dict.values())
             response.reward = reward
             response.eid.run = i + self.run_id_base
+
+            # Save ground_truth and extracted_answer to info field for debugging
+            if response.info is None:
+                response.info = {}
+            response.info["ground_truth"] = self.truth
+            response.info["extracted_answer"] = extracted_answer
+
             if (
                 response.truncate_status == "response_truncated"
                 and response.action_mask is not None
