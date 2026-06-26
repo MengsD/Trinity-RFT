@@ -122,9 +122,9 @@ class DataSelectorConfig:
 
     selector_type: Optional[str] = "sequential"
 
-    # For shuffle (only effective when selector_type == "shuffle")
+    # For shuffle
     seed: int = 42
-    random_method: str = "numpy"  # "numpy" (PCG64, default) | "python" (MT19937, matches slime)
+    random_method: str = "numpy"  # "numpy" (PCG64) | "python" (MT19937)
 
     # Estimator Config
     feature_keys: List[str] = field(default_factory=lambda: [])

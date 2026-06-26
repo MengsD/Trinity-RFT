@@ -374,7 +374,6 @@ class TestShuffleSelector(unittest.TestCase):
         self.assertNotEqual(epoch0, epoch1)
 
     def test_python_method_matches_slime_bit_for_bit(self):
-        # slime/utils/data.py:shuffle() is: random.seed(seed+epoch); random.shuffle(range(N))
         class _DataSource:
             dataset_size = 10
 
@@ -401,7 +400,7 @@ class TestShuffleSelector(unittest.TestCase):
             default_sel.get_indices(_DataSource.dataset_size),
             numpy_sel.get_indices(_DataSource.dataset_size),
         )
-        # And it must NOT equal the python/slime ordering for the same seed.
+        # And it must NOT equal the python ordering for the same seed.
         slime_first = list(range(_DataSource.dataset_size))
         random.Random(42).shuffle(slime_first)
         numpy_first = ShuffleSelector(
