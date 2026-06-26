@@ -1,4 +1,5 @@
 import os
+import random
 import shutil
 import unittest
 from typing import Dict, List
@@ -371,3 +372,57 @@ class TestShuffleSelector(unittest.TestCase):
         self.assertEqual(sorted(epoch1), list(range(_DataSource.dataset_size)))
         # consecutive epochs must not reuse the same permutation
         self.assertNotEqual(epoch0, epoch1)
+
+    def test_python_method_matches_slime_bit_for_bit(self):
+        # slime/utils/data.py:shuffle() is: random.seed(seed+epoch); random.shuffle(range(N))
+        class _DataSource:
+            dataset_size = 10
+
+        seed = 42
+        selector = ShuffleSelector(
+            _DataSource(), DataSelectorConfig(seed=seed, random_method="python")
+        )
+        for epoch in range(2):
+            expected = list(range(_DataSource.dataset_size))
+            random.Random(seed + epoch).shuffle(expected)
+            got = selector.get_indices(_DataSource.dataset_size)
+            self.assertEqual(got, expected)
+
+    def test_numpy_method_is_default_and_unchanged(self):
+        class _DataSource:
+            dataset_size = 10
+
+        # Explicit "numpy" and the default must produce identical output.
+        default_sel = ShuffleSelector(_DataSource(), DataSelectorConfig(seed=42))
+        numpy_sel = ShuffleSelector(
+            _DataSource(), DataSelectorConfig(seed=42, random_method="numpy")
+        )
+        self.assertEqual(
+            default_sel.get_indices(_DataSource.dataset_size),
+            numpy_sel.get_indices(_DataSource.dataset_size),
+        )
+        # And it must NOT equal the python/slime ordering for the same seed.
+        slime_first = list(range(_DataSource.dataset_size))
+        random.Random(42).shuffle(slime_first)
+        numpy_first = ShuffleSelector(
+            _DataSource(), DataSelectorConfig(seed=42, random_method="numpy")
+        ).get_indices(_DataSource.dataset_size)
+        self.assertNotEqual(numpy_first, slime_first)
+
+    def test_python_method_cross_epoch_boundary(self):
+        class _DataSource:
+            dataset_size = 10
+
+        seed = 42
+        selector = ShuffleSelector(
+            _DataSource(), DataSelectorConfig(seed=seed, random_method="python")
+        )
+        # Consume 7, then a batch of 6 that spans the epoch boundary.
+        selector.get_indices(7)
+        spanning = selector.get_indices(6)
+        epoch0 = list(range(_DataSource.dataset_size))
+        random.Random(seed + 0).shuffle(epoch0)
+        epoch1 = list(range(_DataSource.dataset_size))
+        random.Random(seed + 1).shuffle(epoch1)
+        expected = epoch0[7:] + epoch1[:3]  # 3 remaining + 3 from next epoch
+        self.assertEqual(spanning, expected)

@@ -1,4 +1,5 @@
 """Data selectors."""
+import random
 from typing import Dict, List
 
 import numpy as np
@@ -122,16 +123,27 @@ class ShuffleSelector(BaseSelector):
         self.dataset_size = data_source.dataset_size  # Total available samples
         self.current_index = 0  # Progress tracker
         self.seed = config.seed  # For reproducible shuffling
+        self.random_method = config.random_method  # "numpy" | "python" (slime-compatible)
         self.orders = self._get_orders()  # Current shuffled index order
 
     def _get_orders(self) -> List[int]:
         """
         Generate a new shuffled order for the current epoch.
 
-        Uses NumPy's PCG64 random generator seeded by epoch number for reproducibility.
-        Ensures different shuffle per epoch while being deterministic if seed is fixed.
+        Seeded by epoch number for reproducibility: a different shuffle per epoch,
+        deterministic for a fixed seed. ``random_method`` selects the RNG:
+        "numpy" uses numpy PCG64 (default); "python" uses Python's random.shuffle,
+        bit-for-bit identical to slime (slime/utils/data.py:shuffle()).
         """
-        rng = np.random.default_rng(self.seed + self.current_index // self.dataset_size)
+        epoch = self.current_index // self.dataset_size
+        if self.random_method == "python":
+            # random.Random(x).shuffle == global random.seed(x); random.shuffle
+            # (same MT19937), without polluting global random state.
+            rng = random.Random(self.seed + epoch)
+            orders = list(range(self.dataset_size))
+            rng.shuffle(orders)
+            return orders
+        rng = np.random.default_rng(self.seed + epoch)
         return rng.permutation(self.dataset_size).tolist()
 
     def get_indices(self, batch_size: int, return_extra_info: bool = False) -> List[int]:
